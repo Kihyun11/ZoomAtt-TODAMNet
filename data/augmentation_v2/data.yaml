@@ -1,0 +1,16 @@
+names:
+- large-vehicle
+- plane
+- ship
+- small-vehicle
+- storage-tank
+nc: 5
+roboflow:
+  license: CC BY 4.0
+  project: fyp_yolov8
+  url: https://universe.roboflow.com/fyp-hodho/fyp_yolov8/dataset/2
+  version: 2
+  workspace: fyp-hodho
+test: C:/Users/white/OneDrive/바탕 화면/MoonNet/data/augmentation_v2/test/images
+train: C:/Users/white/OneDrive/바탕 화면/MoonNet/data/augmentation_v2/train/images
+val: C:/Users/white/OneDrive/바탕 화면/MoonNet/data/augmentation_v2/valid/images
