@@ -31,6 +31,8 @@ __all__ = (
     "Conv_TODAM",
     "CoordAttention",
     "Conv_CA",
+    "ZoomAttention",
+    "Conv_ZoomAtt",
 )
 
 
@@ -929,3 +931,44 @@ class Conv_CA(nn.Module):
     def forward_fuse(self, x):
         return self.attn(self.act(self.conv(x)))
 
+
+# --------------------------------------
+class ZoomAttention(nn.Module):
+    def __init__(self, in_channels, patch_size=4):
+        super().__init__()
+        self.patch_size = patch_size
+        self.refiner = nn.Sequential(
+            nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1, groups=1),
+            nn.BatchNorm2d(in_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(in_channels, in_channels, kernel_size=1),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        B, C, H, W = x.shape
+        pooled = F.adaptive_avg_pool2d(x, output_size=(self.patch_size, self.patch_size))
+        refined = self.refiner(pooled)
+        attn = F.interpolate(refined, size=(H, W), mode='bilinear', align_corners=False)
+        return x * attn
+
+
+# --------------------------------------
+class Conv_ZoomAtt(nn.Module):
+    default_act = nn.SiLU()
+
+    def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True, patch_size=4):
+        super().__init__()
+        self.conv = nn.Conv2d(c1, c2, k, s, autopad(k, p, d), groups=g, dilation=d, bias=False)
+        self.bn = nn.BatchNorm2d(c2)
+        self.act = self.default_act if act is True else act if isinstance(act, nn.Module) else nn.Identity()
+        self.attn = ZoomAttention(c2, patch_size=patch_size)
+
+    def forward(self, x):
+        return self.attn(self.act(self.bn(self.conv(x))))
+
+    def forward_fuse(self, x):
+        return self.attn(self.act(self.conv(x)))
+
+
+#----------------------------------------

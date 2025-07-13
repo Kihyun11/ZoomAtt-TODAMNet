@@ -81,6 +81,8 @@ from .conv import (
     Conv_CA,
     CoordAttention,
     TODAM,
+    ZoomAttention,
+    Conv_ZoomAtt,
 )
 from .head import (
     OBB,

@@ -74,6 +74,8 @@ from ultralytics.nn.modules import (
     Conv_CA,
     CoordAttention,
     TODAM,
+    ZoomAttention,
+    Conv_ZoomAtt,
 )
 from ultralytics.utils import DEFAULT_CFG_DICT, DEFAULT_CFG_KEYS, LOGGER, YAML, colorstr, emojis
 from ultralytics.utils.checks import check_requirements, check_suffix, check_yaml
@@ -1654,6 +1656,8 @@ def parse_model(d, ch, verbose=True):
             TODAM,
             Conv_CA,
             Conv_TODAM,
+            ZoomAttention,
+            Conv_ZoomAtt,
         }
     )
     repeat_modules = frozenset(  # modules with 'repeat' arguments
