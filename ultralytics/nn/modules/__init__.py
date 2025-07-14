@@ -83,6 +83,7 @@ from .conv import (
     TODAM,
     ZoomAttention,
     Conv_ZoomAtt,
+    EdgeEnhance,
 )
 from .head import (
     OBB,

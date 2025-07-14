@@ -33,6 +33,7 @@ __all__ = (
     "Conv_CA",
     "ZoomAttention",
     "Conv_ZoomAtt",
+    "EdgeEnhance",
 )
 
 
@@ -810,27 +811,90 @@ class Conv_CBAM(nn.Module):
 #---------------------------------------------------
 #Tiny Object Detection Attention Module
 
+# class TODAM(nn.Module):
+#     def __init__(self, channels, reduction=8):
+#         super().__init__()
+        
+#         # Channel attention
+#         self.avg_pool = nn.AdaptiveAvgPool2d(1)
+#         self.max_pool = nn.AdaptiveMaxPool2d(1)
+
+#         self.fc = nn.Sequential(
+#             nn.Conv2d(channels, channels // reduction, 1, bias=False),
+#             nn.ReLU(inplace=True),
+#             nn.Conv2d(channels // reduction, channels, 1, bias=False)
+#         )
+
+#         # Spatial attention with dilation (focus on high-res regions)
+#         self.spatial = nn.Sequential(
+#             nn.Conv2d(2, 1, kernel_size=7, padding=6, dilation=2),
+#             nn.Sigmoid()
+#         )
+
+#     def forward(self, x):
+#         # Channel Attention
+#         avg_out = self.fc(self.avg_pool(x))
+#         max_out = self.fc(self.max_pool(x))
+#         ca = torch.sigmoid(avg_out + max_out)
+#         x_ca = x * ca
+
+#         # Spatial Attention
+#         avg_spatial = torch.mean(x_ca, dim=1, keepdim=True)
+#         max_spatial, _ = torch.max(x_ca, dim=1, keepdim=True)
+#         sa = self.spatial(torch.cat([avg_spatial, max_spatial], dim=1))
+#         out = x_ca * sa
+
+#         return out
+
+
+# class Conv_TODAM(nn.Module):
+#     """
+#     Convolution layer followed by TinyObjectAttention.
+#     """
+#     default_act = nn.SiLU()
+
+#     def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True):
+#         super().__init__()
+#         self.conv = nn.Conv2d(c1, c2, k, s, autopad(k, p, d), groups=g, dilation=d, bias=False)
+#         self.bn = nn.BatchNorm2d(c2)
+#         self.act = self.default_act if act is True else act if isinstance(act, nn.Module) else nn.Identity()
+#         self.attn = TODAM(c2)  # defined earlier
+
+#     def forward(self, x):
+#         return self.attn(self.act(self.bn(self.conv(x))))
+
+#     def forward_fuse(self, x):
+#         return self.attn(self.act(self.conv(x)))
+
+
 class TODAM(nn.Module):
     def __init__(self, channels, reduction=8):
         super().__init__()
-        
-        # Channel attention
+        self.edge = EdgeEnhance()
+
+        # Channel Attention
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.max_pool = nn.AdaptiveMaxPool2d(1)
-
         self.fc = nn.Sequential(
             nn.Conv2d(channels, channels // reduction, 1, bias=False),
             nn.ReLU(inplace=True),
             nn.Conv2d(channels // reduction, channels, 1, bias=False)
         )
 
-        # Spatial attention with dilation (focus on high-res regions)
+        # Spatial Attention (multi-dilated)
         self.spatial = nn.Sequential(
-            nn.Conv2d(2, 1, kernel_size=7, padding=6, dilation=2),
+            nn.Conv2d(2, 1, kernel_size=3, padding=1, dilation=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(1, 1, kernel_size=3, padding=2, dilation=2),
             nn.Sigmoid()
         )
 
+        # Learnable fusion gate between spatial attention and identity
+        self.gate_weight = nn.Parameter(torch.tensor(0.5))  # α
+
     def forward(self, x):
+        edge_feat = self.edge(x)
+
         # Channel Attention
         avg_out = self.fc(self.avg_pool(x))
         max_out = self.fc(self.max_pool(x))
@@ -841,15 +905,15 @@ class TODAM(nn.Module):
         avg_spatial = torch.mean(x_ca, dim=1, keepdim=True)
         max_spatial, _ = torch.max(x_ca, dim=1, keepdim=True)
         sa = self.spatial(torch.cat([avg_spatial, max_spatial], dim=1))
-        out = x_ca * sa
 
-        return out
+        # Learnable Fusion
+        fused = x_ca * (self.gate_weight * sa + (1 - self.gate_weight))
 
+        # Add edge feature (residual connection)
+        return fused + 0.1 * edge_feat
 
 class Conv_TODAM(nn.Module):
-    """
-    Convolution layer followed by TinyObjectAttention.
-    """
+    """Convolution layer followed by enhanced TODAM."""
     default_act = nn.SiLU()
 
     def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True):
@@ -857,14 +921,13 @@ class Conv_TODAM(nn.Module):
         self.conv = nn.Conv2d(c1, c2, k, s, autopad(k, p, d), groups=g, dilation=d, bias=False)
         self.bn = nn.BatchNorm2d(c2)
         self.act = self.default_act if act is True else act if isinstance(act, nn.Module) else nn.Identity()
-        self.attn = TODAM(c2)  # defined earlier
+        self.attn = TODAM(c2)
 
     def forward(self, x):
         return self.attn(self.act(self.bn(self.conv(x))))
 
     def forward_fuse(self, x):
         return self.attn(self.act(self.conv(x)))
-
 
 #---------------------------------------------------
 class CoordAttention(nn.Module):
@@ -972,3 +1035,18 @@ class Conv_ZoomAtt(nn.Module):
 
 
 #----------------------------------------
+
+class EdgeEnhance(nn.Module):
+    """Simple Sobel-based edge enhancement."""
+    def __init__(self):
+        super().__init__()
+        sobel_x = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float32)
+        sobel_y = sobel_x.T
+        kernel = torch.stack([sobel_x, sobel_y]).unsqueeze(1)
+        self.weight = nn.Parameter(kernel, requires_grad=False)
+
+    def forward(self, x):
+        gray = x.mean(dim=1, keepdim=True)
+        edge = F.conv2d(gray, self.weight, padding=1)
+        edge = edge.abs().sum(dim=1, keepdim=True)
+        return edge.expand_as(x)
