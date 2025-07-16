@@ -868,55 +868,61 @@ class Conv_CBAM(nn.Module):
 
 
 class TODAM(nn.Module):
-    def __init__(self, channels, reduction=8):
+    def __init__(self, channels, reduction=8, groups=4):
         super().__init__()
-        self.edge = EdgeEnhance()
+        self.groups = groups
 
-        # Channel Attention
-        self.avg_pool = nn.AdaptiveAvgPool2d(1)
-        self.max_pool = nn.AdaptiveMaxPool2d(1)
-        self.fc = nn.Sequential(
-            nn.Conv2d(channels, channels // reduction, 1, bias=False),
+        # Channel Attention with grouped FC and channel shuffle
+        self.channel_fc = nn.Sequential(
+            nn.Conv2d(channels, channels, 1, groups=groups, bias=False),
             nn.ReLU(inplace=True),
-            nn.Conv2d(channels // reduction, channels, 1, bias=False)
-        )
-
-        # Spatial Attention (multi-dilated)
-        self.spatial = nn.Sequential(
-            nn.Conv2d(2, 1, kernel_size=3, padding=1, dilation=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(1, 1, kernel_size=3, padding=2, dilation=2),
+            nn.Conv2d(channels, channels, 1, groups=1, bias=False),
             nn.Sigmoid()
         )
 
-        # Learnable fusion gate between spatial attention and identity
-        self.gate_weight = nn.Parameter(torch.tensor(0.5))  # α
+        # Learnable pooling instead of avg/max
+        self.learnable_spatial_pool = nn.Sequential(
+            nn.Conv2d(channels, 2, 1, bias=False),
+            nn.BatchNorm2d(2),
+            nn.ReLU(inplace=True)
+        )
+
+        # Spatial Attention with multi-dilation
+        self.spatial = nn.Sequential(
+            nn.Conv2d(2, 1, kernel_size=3, padding=1, dilation=1),
+            nn.Conv2d(1, 1, kernel_size=3, padding=2, dilation=2),
+            nn.Conv2d(1, 1, kernel_size=3, padding=3, dilation=3),
+            nn.Sigmoid()
+        )
+
+        # Learnable fusion scalar
+        self.alpha = nn.Parameter(torch.tensor(0.5))
+
+    def channel_shuffle(self, x, groups):
+        B, C, H, W = x.shape
+        x = x.reshape(B, groups, C // groups, H, W)
+        x = x.permute(0, 2, 1, 3, 4).reshape(B, C, H, W)
+        return x
 
     def forward(self, x):
-        edge_feat = self.edge(x)
-
-        # Channel Attention
-        avg_out = self.fc(self.avg_pool(x))
-        max_out = self.fc(self.max_pool(x))
-        ca = torch.sigmoid(avg_out + max_out)
+        # Channel attention
+        ca = self.channel_fc(x)
+        ca = self.channel_shuffle(ca, self.groups)
         x_ca = x * ca
 
-        # Spatial Attention
-        avg_spatial = torch.mean(x_ca, dim=1, keepdim=True)
-        max_spatial, _ = torch.max(x_ca, dim=1, keepdim=True)
-        sa = self.spatial(torch.cat([avg_spatial, max_spatial], dim=1))
+        # Learnable spatial pooling
+        sa_input = self.learnable_spatial_pool(x_ca)
+        sa = self.spatial(sa_input)
 
-        # Learnable Fusion
-        fused = x_ca * (self.gate_weight * sa + (1 - self.gate_weight))
+        # Residual attention fusion
+        out = x + self.alpha * (x_ca * sa)
+        return out
 
-        # Add edge feature (residual connection)
-        return fused + 0.1 * edge_feat
 
 class Conv_TODAM(nn.Module):
-    """Convolution layer followed by enhanced TODAM."""
     default_act = nn.SiLU()
 
-    def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True):
+    def __init__(self, c1, c2, k=3, s=1, p=None, g=1, d=1, act=True):
         super().__init__()
         self.conv = nn.Conv2d(c1, c2, k, s, autopad(k, p, d), groups=g, dilation=d, bias=False)
         self.bn = nn.BatchNorm2d(c2)
