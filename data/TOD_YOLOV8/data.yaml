@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 5
+names: ['large-vehicle', 'plane', 'ship', 'small-vehicle', 'storage-tank']
+
+roboflow:
+  workspace: fyp-hodho
+  project: tinyobjdetection
+  version: 3
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/fyp-hodho/tinyobjdetection/dataset/3
