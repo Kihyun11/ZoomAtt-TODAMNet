@@ -1,0 +1,11 @@
+                 Class     Images  Instances      Box(P          R      mAP50  mAP50-95): 100%|██████████| 9/9 [00:11<00:00,  1.25s/it]
+                   all        137      16616        0.8      0.525      0.598      0.368
+         large-vehicle         59       2080      0.787      0.746      0.789      0.583
+                 plane         12        184      0.738      0.712      0.777      0.461
+                  ship         60       6636      0.883      0.397        0.5      0.305
+         small-vehicle         92       7207      0.745      0.307      0.362      0.199
+          storage-tank         23        509      0.846      0.464      0.562      0.293
+Speed: 1.1ms preprocess, 4.3ms inference, 0.0ms loss, 51.1ms postprocess per image
+Saving /workspace/Attention-module-for-tiny-object-detection/runs/detect/val/predictions.json...
+Results saved to /workspace/Attention-module-for-tiny-object-detection/runs/detect/val
+{'metrics/precision(B)': 0.799776765445625, 'metrics/recall(B)': 0.525133575667701, 'metrics/mAP50(B)': 0.5980283885896552, 'metrics/mAP50-95(B)': 0.36815170388265733, 'fitness': 0.39113937235335716}
