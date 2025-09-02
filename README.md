@@ -31,7 +31,7 @@ pip install opencv-python==4.8.1.78
 
 ## TODAM Module
 <p align="center">
-  <img src="TODAM.png" alt="todam" width="500"/>
+  <img src="TODAM.png" alt="todam" width="600"/>
   <br>
   <em>The TODAM explanation</em>
 </p>
