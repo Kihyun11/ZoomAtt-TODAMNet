@@ -1,5 +1,5 @@
 # Attention-module-for-tiny-object-detection
-Introducing an attention module highly inspired by Squeeze-and-Excitation Block and designed for the enhancement of tiny object detection
+Introducing two attention modules, Zoom-Attention module and Tiny Object Detection Attention Module (TODAM), highly inspired by Squeeze-and-Excitation Block and designed for the enhancement of tiny object detection
 
 ### Python Library Installation
 Following python libraries are required before starting the training
@@ -31,7 +31,7 @@ pip install opencv-python==4.8.1.78
 
 ## TODAM Module
 <p align="center">
-  <img src="TODAM.png" alt="todam" width="600"/>
+  <img src="TODAM.png" alt="todam" width="700"/>
   <br>
   <em>The TODAM explanation</em>
 </p>
