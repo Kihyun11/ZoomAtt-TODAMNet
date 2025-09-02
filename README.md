@@ -21,3 +21,10 @@ pip install tqdm
 ```python
 pip install opencv-python==4.8.1.78
 ```
+
+## Zoom-Attention Module
+<p align="center">
+  <img src="images/nova_poster.jpg" alt="NOVA Poster" width="500"/>
+  <br>
+  <em>The Zoom-Attention Module explanation</em>
+</p>
